@@ -30,7 +30,6 @@ public interface Sequenced
      * @return The number of slots remaining.
      */
     /**
-     * 返回当前RingBuffer可用的空间数目.
      */
     long remainingCapacity();
 
