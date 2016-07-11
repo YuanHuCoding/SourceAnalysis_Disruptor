@@ -36,6 +36,8 @@ public interface SequenceBarrier
      */
     /**
      * 等待sequence位置的Event变得可以消费.
+     * 等待一个序列变为可用，然后消费这个序列。
+     * 这货明显是给事件处理者使用的。
      *
      * @param sequence 等待的位置.
      */

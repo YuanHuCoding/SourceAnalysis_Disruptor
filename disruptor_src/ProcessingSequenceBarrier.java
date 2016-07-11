@@ -22,8 +22,8 @@ package com.lmax.disruptor;
  */
 final class ProcessingSequenceBarrier implements SequenceBarrier
 {
-    private final WaitStrategy waitStrategy;
-    private final Sequence dependentSequence;
+    private final WaitStrategy waitStrategy;//等待策略。
+    private final Sequence dependentSequence;//这个域可能指向一个序列组。
     private volatile boolean alerted = false;
     private final Sequence cursorSequence;
     private final Sequencer sequencer;
@@ -51,15 +51,16 @@ final class ProcessingSequenceBarrier implements SequenceBarrier
     public long waitFor(final long sequence)
         throws AlertException, InterruptedException, TimeoutException
     {
+        //先检测报警状态。
         checkAlert();
-
+        //然后根据等待策略来等待可用的序列值。  
         long availableSequence = waitStrategy.waitFor(sequence, cursorSequence, dependentSequence, this);
 
         if (availableSequence < sequence)
         {
-            return availableSequence;
+            return availableSequence;//如果可用的序列值小于给定的序列，那么直接返回。 
         }
-
+        //否则，要返回能安全使用的最大的序列值。
         return sequencer.getHighestPublishedSequence(sequence, availableSequence);
     }
 
@@ -78,8 +79,8 @@ final class ProcessingSequenceBarrier implements SequenceBarrier
     @Override
     public void alert()
     {
-        alerted = true;
-        waitStrategy.signalAllWhenBlocking();
+        alerted = true;//设置通知标记 
+        waitStrategy.signalAllWhenBlocking();//如果有线程以阻塞的方式等待序列，将其唤醒。
     }
 
     @Override

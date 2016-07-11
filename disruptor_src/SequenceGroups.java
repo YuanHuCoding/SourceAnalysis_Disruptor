@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 /**
  * Provides static methods for managing a {@link SequenceGroup} object.
+ * 是针对SequenceGroup的帮助类，里面提供了addSequences和removeSequence方法，都是原子操作。
  */
 class SequenceGroups
 {

@@ -30,6 +30,7 @@ public interface Sequenced
      * @return The number of slots remaining.
      */
     /**
+     * 返回当前RingBuffer可用的空间数目.
      */
     long remainingCapacity();
 
@@ -83,7 +84,7 @@ public interface Sequenced
      * @throws InsufficientCapacityException
      */
     /**
-     * 尝试向RingBuffer申请一个可用空间, 如果有,则返回该可用空间的位置序号,否则抛出异常.
+     * 尝试向RingBuffer申请一个可用空间, 如果有,则返回该可用空间的位置序号,否则抛出异常.这个是无阻塞的方法。
      */
     long tryNext() throws InsufficientCapacityException;
 
@@ -98,7 +99,7 @@ public interface Sequenced
      * @throws InsufficientCapacityException
      */
     /**
-     * 尝试向RingBuffer申请n个可用空间,如果有,则返回这些可用空间中最后一个空间的位置序号,否则抛出异常.
+     * 尝试向RingBuffer申请n个可用空间,如果有,则返回这些可用空间中最后一个空间的位置序号,否则抛出异常.这个是无阻塞的方法。
      */
     long tryNext(int n) throws InsufficientCapacityException;
 

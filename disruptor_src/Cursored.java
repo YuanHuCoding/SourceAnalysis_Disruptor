@@ -25,7 +25,7 @@ public interface Cursored
 {
     /**
      * Get the current cursor value.
-     *
+     * Cursored接口只提供了一个获取当前序列值(游标)的方法。
      * @return current cursor value
      */
     long getCursor();
