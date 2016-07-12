@@ -36,12 +36,16 @@ public final class BlockingWaitStrategy implements WaitStrategy
         long availableSequence;
         if (cursorSequence.get() < sequence)
         {
+            //如果RingBuffer上当前可用的序列值小于要申请的序列值。
             lock.lock();
             try
             {
+                //再次检测
                 while (cursorSequence.get() < sequence)
                 {
+                    //检查序列栅栏状态(事件处理器是否被关闭) 
                     barrier.checkAlert();
+                    //当前线程在processorNotifyCondition条件上等待。  
                     processorNotifyCondition.await();
                 }
             }
@@ -51,6 +55,7 @@ public final class BlockingWaitStrategy implements WaitStrategy
             }
         }
 
+        //再次检测，避免事件处理器关闭的情况。  
         while ((availableSequence = dependentSequence.get()) < sequence)
         {
             barrier.checkAlert();
@@ -65,6 +70,7 @@ public final class BlockingWaitStrategy implements WaitStrategy
         lock.lock();
         try
         {
+            //唤醒在processorNotifyCondition条件上等待的处理事件线程。
             processorNotifyCondition.signalAll();
         }
         finally

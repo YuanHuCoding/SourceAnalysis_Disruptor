@@ -34,6 +34,7 @@ public final class BusySpinWaitStrategy implements WaitStrategy
         while ((availableSequence = dependentSequence.get()) < sequence)
         {
             barrier.checkAlert();
+            //自旋 
         }
 
         return availableSequence;

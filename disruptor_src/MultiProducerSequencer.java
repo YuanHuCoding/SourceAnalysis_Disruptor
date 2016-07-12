@@ -40,6 +40,7 @@ public final class MultiProducerSequencer extends AbstractSequencer
 
     // availableBuffer tracks the state of each ringbuffer slot
     // see below for more details on the approach
+    // availableBuffer是用来记录每一个ringbuffer槽的状态。 
     private final int[] availableBuffer;
     private final int indexMask;
     private final int indexShift;

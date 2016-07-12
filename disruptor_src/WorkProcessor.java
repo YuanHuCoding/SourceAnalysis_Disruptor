@@ -105,12 +105,15 @@ public final class WorkProcessor<T>
     @Override
     public void run()
     {
+        //状态设置与检测
         if (!running.compareAndSet(false, true))
         {
             throw new IllegalStateException("Thread is already running");
         }
+        //先清除序列栅栏的通知状态
         sequenceBarrier.clearAlert();
 
+        //如果workHandler实现了LifecycleAware，这里会对其进行一个启动通知。
         notifyStart();
 
         boolean processedSequence = true;
@@ -126,9 +129,12 @@ public final class WorkProcessor<T>
                 // typically, this will be true
                 // this prevents the sequence getting too far forward if an exception
                 // is thrown from the WorkHandler
+                //判断上一个事件是否已经处理完毕。 
                 if (processedSequence)
                 {
+                    //如果处理完毕，重置标识。
                     processedSequence = false;
+                    //原子的获取下一要处理事件的序列值。
                     do
                     {
                         nextSequence = workSequence.get() + 1L;
@@ -137,14 +143,19 @@ public final class WorkProcessor<T>
                     while (!workSequence.compareAndSet(nextSequence - 1L, nextSequence));
                 }
 
+                //检查序列值是否需要申请。这一步是为了防止和事件生产者冲突。
                 if (cachedAvailableSequence >= nextSequence)
                 {
+                    //从RingBuffer上获取事件。
                     event = ringBuffer.get(nextSequence);
+                    //委托给workHandler处理事件。
                     workHandler.onEvent(event);
+                    //设置事件处理完成标识。 
                     processedSequence = true;
                 }
                 else
                 {
+                    //如果需要申请，通过序列栅栏来申请可用的序列。  
                     cachedAvailableSequence = sequenceBarrier.waitFor(nextSequence);
                 }
             }
@@ -154,21 +165,27 @@ public final class WorkProcessor<T>
             }
             catch (final AlertException ex)
             {
+                //处理通知
                 if (!running.get())
                 {
+                    //如果当前处理器被停止，那么退出主循环
                     break;
                 }
             }
             catch (final Throwable ex)
             {
+                //处理异常
                 // handle, mark as processed, unless the exception handler threw an exception
                 exceptionHandler.handleEventException(ex, nextSequence, event);
+                //如果异常处理器不抛出异常的话，就认为事件处理完毕，设置事件处理完成标识。
                 processedSequence = true;
             }
         }
 
+        //退出主循环后，如果workHandler实现了LifecycleAware，这里会对其进行一个关闭通知。
         notifyShutdown();
 
+        //设置当前处理器状态为停止。
         running.set(false);
     }
 

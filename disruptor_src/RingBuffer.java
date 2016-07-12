@@ -83,7 +83,7 @@ abstract class RingBufferFields<E> extends RingBufferPad
     {
         for (int i = 0; i < bufferSize; i++)
         {
-            entries[BUFFER_PAD + i] = eventFactory.newInstance();
+            entries[BUFFER_PAD + i] = eventFactory.newInstance();//队列内事件的预填充
         }
     }
 
@@ -97,6 +97,11 @@ abstract class RingBufferFields<E> extends RingBufferPad
 /**
  * Ring based store of reusable entries containing the data representing
  * an event being exchanged between event producer and {@link EventProcessor}s.
+ *  RingBuffer的内部结构明确了：内部用数组来实现，同时有保存数组长度的域bufferSize和下标掩码indexMask，还有一个sequencer。
+ *  这里要注意几点：
+ *  1.整个RingBuffer内部做了大量的缓存行填充，前后各填充了56个字节，entries本身也根据引用大小进行了填充，假设引用大小为4字节，那么entries数组两侧就要个填充32个空数组位。也就是说，实际的数组长度比bufferSize要大。所以可以看到根据序列从entries中取元素的方法elementAt内部做了一些调整，不是单纯的取模。
+ *  2.bufferSize必须是2的幂，indexMask就是bufferSize-1，这样取模更高效(sequence&indexMask)。
+ *  3.初始化时需要传入一个EventFactory，用来做队列内事件的预填充。
  *
  * @param <E> implementation storing the data for sharing during exchange or parallel coordination of an event.
  */
