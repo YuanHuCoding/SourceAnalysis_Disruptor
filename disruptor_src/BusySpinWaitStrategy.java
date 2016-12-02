@@ -21,6 +21,7 @@ package com.lmax.disruptor;
  * <p>
  * This strategy will use CPU resource to avoid syscalls which can introduce latency jitter.  It is best
  * used when threads can be bound to specific CPU cores.
+ BusySpinWaitStrategy的实现方法是自旋等待。这种策略会利用CPU资源来避免系统调用带来的延迟抖动，当线程可以绑定到指定CPU(核)的时候可以使用这个策略。
  */
 public final class BusySpinWaitStrategy implements WaitStrategy
 {

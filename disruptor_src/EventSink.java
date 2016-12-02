@@ -1,15 +1,24 @@
 package com.lmax.disruptor;
 
-//EventSink主要是提供发布事件(就是往队列上放数据)的功能，接口上定义了以各种姿势发布事件的方法。
+/*
+    EventSink代表RingBuffer是一个以Event槽为基础的数据结构。
+    EventSink主要是提供发布事件(就是往队列上放数据)的功能，接口上定义了以各种姿势发布事件的方法。
+    EventSink接口的主要方法都是发布Event，发布一个Event的流程是：申请下一个Sequence->申请成功则获取对应槽的Event->初始化并填充对应槽的Event->发布Event。
+    这里，初始化、填充Event是通过实现EventTranslator，EventTranslatorOneArg，EventTranslatorTwoArg，EventTranslatorThreeArg，EventTranslatorVararg这些EventTranslator来做的。
+*/
 public interface EventSink<E>
 {
     /**
-     * Publishes an event to the ring buffer.  It handles
+     * Publishes an event to the ring buffer.  It handles   
      * claiming the next sequence, getting the current (uninitialised)
      * event from the ring buffer and publishing the claimed sequence
      * after translation.
      *
      * @param translator The user specified translation for the event
+     */
+     /**
+     * 申请下一个Sequence->申请成功则获取对应槽的Event->利用translator初始化并填充对应槽的Event->发布Event
+     * @param translator translator用户实现，用于初始化Event，这里是不带参数Translator
      */
     void publishEvent(EventTranslator<E> translator);
 
@@ -23,6 +32,12 @@ public interface EventSink<E>
      * @param translator The user specified translation for the event
      * @return true if the value was published, false if there was insufficient
      * capacity.
+     */
+    /**
+     * 尝试申请下一个Sequence->申请成功则获取对应槽的Event->利用translator初始化并填充对应槽的Event->发布Event
+     * 若空间不足，则立即失败返回
+     * @param translator translator用户实现，用于初始化Event，这里是不带参数Translator
+     * @return 成功true，失败false
      */
     boolean tryPublishEvent(EventTranslator<E> translator);
 
@@ -124,6 +139,10 @@ public interface EventSink<E>
      * for each value that is to be inserted into the ring buffer.
      *
      * @param translators The user specified translation for each event
+     */
+    /**
+     * 包括申请多个Sequence->申请成功则获取对应槽的Event->利用每个translator初始化并填充每个对应槽的Event->发布Event
+     * @param translators
      */
     void publishEvents(EventTranslator<E>[] translators);
 

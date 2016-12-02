@@ -23,6 +23,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * Blocking strategy that uses a lock and condition variable for {@link EventProcessor}s waiting on a barrier.
  * <p>
  * This strategy can be used when throughput and low-latency are not as important as CPU resource.
+ BlockingWaitStrategy的实现方法是阻塞等待。当要求节省CPU资源，而不要求高吞吐量和低延迟的时候使用这个策略。
  */
 public final class BlockingWaitStrategy implements WaitStrategy
 {
@@ -34,9 +35,8 @@ public final class BlockingWaitStrategy implements WaitStrategy
         throws AlertException, InterruptedException
     {
         long availableSequence;
-        if (cursorSequence.get() < sequence)
+        if (cursorSequence.get() < sequence)//如果RingBuffer上当前可用的序列值小于要申请的序列值。
         {
-            //如果RingBuffer上当前可用的序列值小于要申请的序列值。
             lock.lock();
             try
             {

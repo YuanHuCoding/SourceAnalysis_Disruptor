@@ -23,16 +23,18 @@ import com.lmax.disruptor.util.Util;
  * Base class for the various sequencer types (single/multi).  Provides
  * common functionality like the management of gating sequences (add/remove) and
  * ownership of the current cursor.
+ * 基类基本上的作用就是管理追踪序列和关联当前序列。
  */
 public abstract class AbstractSequencer implements Sequencer
 {
+    // 一个基于反射的工具类，它能对指定类的指定的volatile引用字段进行原子更新。(注意这个字段不能是private的) 
     private static final AtomicReferenceFieldUpdater<AbstractSequencer, Sequence[]> SEQUENCE_UPDATER =
         AtomicReferenceFieldUpdater.newUpdater(AbstractSequencer.class, Sequence[].class, "gatingSequences");
 
-    protected final int bufferSize;
-    protected final WaitStrategy waitStrategy;
-    protected final Sequence cursor = new Sequence(Sequencer.INITIAL_CURSOR_VALUE);
-    protected volatile Sequence[] gatingSequences = new Sequence[0];
+    protected final int bufferSize;//记录生产目标RingBuffer的大小
+    protected final WaitStrategy waitStrategy;//表示这个生产者的等待策略
+    protected final Sequence cursor = new Sequence(Sequencer.INITIAL_CURSOR_VALUE);// 生产者的当前的游标位置，初始为-1
+    protected volatile Sequence[] gatingSequences = new Sequence[0];// 消费者当前处理的序号集合
 
     /**
      * Create with the specified buffer size and wait strategy.
@@ -90,7 +92,7 @@ public abstract class AbstractSequencer implements Sequencer
     {
         return SequenceGroups.removeSequence(this, SEQUENCE_UPDATER, sequence);
     }
-
+    
     /**
      * @see Sequencer#getMinimumSequence()
      */

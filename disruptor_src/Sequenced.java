@@ -1,5 +1,9 @@
 package com.lmax.disruptor;
 
+/*
+* 实现此接口类，可以理解为，实现一个有序的存储结构，也就是RingBuffer的一个特性。
+  一个Producer，在生产Event时，先获取下一位置的Sequence，之后填充Event，填充好后再publish，这之后，这个Event就可以被消费处理了
+*/
 public interface Sequenced
 {
     /**
@@ -62,7 +66,7 @@ public interface Sequenced
      */
     /**
      * 向RingBuffer申请n个可用空间给生产者发布Event.主要用于批量发布的场景,使用该函数需要做一些额外的计算,
-     * 比如: 如果需要申请的个数n=10, 则调用该函数之后会返回最后一个可以使用的位置的需要high:
+     * 比如: 如果需要申请的个数n=10, 则调用该函数之后会返回最后一个可以使用的位置的序号high:
      * long high = next(10);
      * 拿到high之后就可以算出第一个可以用的位置的序号low:
      * long low = high - (n - 1);

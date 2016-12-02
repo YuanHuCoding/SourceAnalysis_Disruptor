@@ -23,10 +23,10 @@ package com.lmax.disruptor;
 final class ProcessingSequenceBarrier implements SequenceBarrier
 {
     private final WaitStrategy waitStrategy;//等待策略。
-    private final Sequence dependentSequence;//这个域可能指向一个序列组。
+    private final Sequence dependentSequence;//依赖的其他消费者的Sequence序列组。这个域可能指向一个序列组。
     private volatile boolean alerted = false;
     private final Sequence cursorSequence;
-    private final Sequencer sequencer;
+    private final Sequencer sequencer;//生产者
 
     public ProcessingSequenceBarrier(
         final Sequencer sequencer,
@@ -53,7 +53,7 @@ final class ProcessingSequenceBarrier implements SequenceBarrier
     {
         //先检测报警状态。
         checkAlert();
-        //然后根据等待策略来等待可用的序列值。  
+        //然后根据等待策略来等待可用的序列值。
         long availableSequence = waitStrategy.waitFor(sequence, cursorSequence, dependentSequence, this);
 
         if (availableSequence < sequence)

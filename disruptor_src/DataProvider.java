@@ -15,6 +15,12 @@
  */
 package com.lmax.disruptor;
 
+//按序列值来获取数据
+/*
+这个方法就是获取某个sequence对应的对象，对象类型在这里是抽象的（T）。
+这个方法对于RingBuffer会在两个地方调用，第一个是在生产时，这个Event对象需要被生产者获取往里面填充数据。
+第二个是在消费时，获取这个Event对象用于消费。 
+*/
 public interface DataProvider<T>
 {
     T get(long sequence);

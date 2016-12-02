@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>
  * If the {@link EventHandler} also implements {@link LifecycleAware} it will be notified just after the thread
  * is started and just before the thread is shutdown.
+ 消费者
  *
  * @param <T> event implementation storing the data for sharing during exchange or parallel coordination of an event.
  */
@@ -34,7 +35,7 @@ public final class BatchEventProcessor<T>
     private final AtomicBoolean running = new AtomicBoolean(false);
     //异常处理器
     private ExceptionHandler<? super T> exceptionHandler = new FatalExceptionHandler();
-    //数据提供者。(RingBuffer) 
+    //数据提供者。(就是RingBuffer) 
     private final DataProvider<T> dataProvider;
     //序列栅栏
     private final SequenceBarrier sequenceBarrier;
@@ -76,6 +77,7 @@ public final class BatchEventProcessor<T>
         return sequence;
     }
 
+    //暂停
     @Override
     public void halt()
     {
@@ -112,7 +114,7 @@ public final class BatchEventProcessor<T>
     @Override
     public void run()
     {
-        //状态设置与检测
+        //状态设置与检测， 线程是否运行
         if (!running.compareAndSet(false, true))
         {
             throw new IllegalStateException("Thread is already running");
@@ -133,6 +135,8 @@ public final class BatchEventProcessor<T>
                 try
                 {
                     //通过序列栅栏来等待可用的序列值
+                    //通过SequenceBarrier的waitFor方法申请下一个序列，该方法会返回最大的有效序列，有可能会抛出超时异常
+                    //只有在使用TimeoutBlockingWaitStrategy这个等待策略时才会抛出超时异常
                     final long availableSequence = sequenceBarrier.waitFor(nextSequence);
 
                     //得到可用的序列值后，批量处理nextSequence到availableSequence之间的事件。
@@ -151,6 +155,7 @@ public final class BatchEventProcessor<T>
                 }
                 catch (final TimeoutException e)
                 {
+                    //等待策略是TimeoutBlockingWaitStrategy时，会抛出超时异常
                     //如果发生超时，通知一下超时处理器(如果eventHandler同时实现了timeoutHandler，会将其设置为当前的超时处理器)
                     notifyTimeout(sequence.get());
                 }

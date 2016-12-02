@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
  * <p>
  * <p>This strategy can be used when throughput and low-latency are not as important as CPU resource.
  * Spins, then yields, then waits using the configured fallback WaitStrategy.</p>
+ PhasedBackoffWaitStrategy的实现方法是先自旋(10000次)，不行再临时让出调度(yield)，不行再使用其他的策略进行等待。可以根据具体场景自行设置自旋时间、yield时间和备用等待策略。
  */
 public final class PhasedBackoffWaitStrategy implements WaitStrategy
 {

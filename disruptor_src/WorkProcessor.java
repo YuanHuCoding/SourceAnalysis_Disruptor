@@ -117,7 +117,7 @@ public final class WorkProcessor<T>
         notifyStart();
 
         boolean processedSequence = true;
-        long cachedAvailableSequence = Long.MIN_VALUE;
+        long cachedAvailableSequence = Long.MIN_VALUE; //cacheeAvailableSequence用来标识当前RingBuffer中可以操作的有效序列
         long nextSequence = sequence.get();
         T event = null;
         while (true)
@@ -130,6 +130,9 @@ public final class WorkProcessor<T>
                 // this prevents the sequence getting too far forward if an exception
                 // is thrown from the WorkHandler
                 //判断上一个事件是否已经处理完毕。 
+                //processedSequence用来标识当前申请到的序列是否正常处理完成，如果正常处理完成，则开始申请下一个序列
+                //通过对workSequence进行循环申请的方法，知道申请到下一个序列为止，这里是由于有多个线程同时在通过
+                //workSequence进行下一个序列的申请，所以通过CAS的方式实现并发处理
                 if (processedSequence)
                 {
                     //如果处理完毕，重置标识。
@@ -144,6 +147,8 @@ public final class WorkProcessor<T>
                 }
 
                 //检查序列值是否需要申请。这一步是为了防止和事件生产者冲突。
+                //当成功申请到下一个序列之后，此时cachedAvailableSequence大于等于申请到的序列，则进行数据处理
+                //如果小于申请到的序列nextSequence，则通过sequenceBarrier去获取ringBuffer上的有效序列
                 if (cachedAvailableSequence >= nextSequence)
                 {
                     //从RingBuffer上获取事件。

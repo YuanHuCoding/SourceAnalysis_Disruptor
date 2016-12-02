@@ -25,6 +25,15 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
  */
 class SequenceGroups
 {
+    /**
+    * 原子添加sequences
+    * 
+    * @param holder 原子更新的域所属的类对象
+    * @param updater 原子更新的域对象
+    * @param cursor 定位
+    * @param sequencesToAdd 要添加的sequences
+    * @param <T>
+    */
     static <T> void addSequences(
         final T holder,
         final AtomicReferenceFieldUpdater<T, Sequence[]> updater,
@@ -35,6 +44,7 @@ class SequenceGroups
         Sequence[] updatedSequences;
         Sequence[] currentSequences;
 
+        //在更新成功之前，一直重新读取currentSequences，扩充为添加所有sequence之后的updatedSequences
         do
         {
             currentSequences = updater.get(holder);
@@ -42,6 +52,7 @@ class SequenceGroups
             cursorSequence = cursor.getCursor();
 
             int index = currentSequences.length;
+            //将新的sequences的值设置为cursorSequence
             for (Sequence sequence : sequencesToAdd)
             {
                 sequence.set(cursorSequence);
@@ -57,6 +68,15 @@ class SequenceGroups
         }
     }
 
+    /**
+    * 原子移除某个指定的sequence
+    * 
+    * @param holder 原子更新的域所属的类对象
+    * @param sequenceUpdater 原子更新的域对象
+    * @param sequence 要移除的sequence
+    * @param <T>
+    * @return
+    */
     static <T> boolean removeSequence(
         final T holder,
         final AtomicReferenceFieldUpdater<T, Sequence[]> sequenceUpdater,

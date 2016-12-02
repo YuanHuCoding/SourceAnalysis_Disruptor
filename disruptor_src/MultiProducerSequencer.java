@@ -30,6 +30,11 @@ import com.lmax.disruptor.util.Util;
  * to {@link Sequencer#next()}, to determine the highest available sequence that can be read, then
  * {@link Sequencer#getHighestPublishedSequence(long, long)} should be used.
  */
+ /**
+ Multi模式与Single模式相比，有一个不同的地方就在于availableBuffer这个整型数组，这个数组大小为bufferSize，
+ 用来标识RingBuffer中每个槽位的状态，其中存放的值，就是生产者的每个序列当前绕环形数组的圈数，
+ 主要是在publish的时候会更新这个值
+ */
 public final class MultiProducerSequencer extends AbstractSequencer
 {
     private static final Unsafe UNSAFE = Util.getUnsafe();
@@ -108,6 +113,12 @@ public final class MultiProducerSequencer extends AbstractSequencer
 
     /**
      * @see Sequencer#next(int)
+     */
+     /*
+     与Single模式的next方法大同小异，但是也有一些不同的地方，我们一起看下
+     1、生产者当前的序列是通过cursor来获取的，没有Single模式下的nextValue
+     2、出现追尾时候时的处理，与Single模式一致
+     3、申请序列成功之后，会设置cursor的值为申请后的值
      */
     @Override
     public long next(int n)
@@ -251,6 +262,11 @@ public final class MultiProducerSequencer extends AbstractSequencer
      * minimum gating sequence is effectively our last available position in the
      * buffer), when we have new data and successfully claimed a slot we can simply
      * write over the top.
+     */
+     /*
+     我们看到Multi模式与Single模式不一样，发布时没有设置cursor的值，而是对availableBuffer对应的槽位进行更新，
+     更新的值为 sequence >>> indexShift，其实就是绕环形数组的圈数.
+     而消费者在获取最大的有效序列时，也是通过与availableBuffer的对应序列的值进行比较进行判断
      */
     private void setAvailable(final long sequence)
     {

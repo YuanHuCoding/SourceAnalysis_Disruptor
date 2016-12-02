@@ -26,15 +26,21 @@ abstract class RingBufferPad
     protected long p1, p2, p3, p4, p5, p6, p7;
 }
 
+/**
+注释中提到对于entries数组的缓存行填充，申请的数组大小为实际需要大小加上2 * BUFFER_PAD，所占空间就是2*128字节。由于数组中的元素经常访问，所以将数组中的实际元素两边各加上128字节的padding防止false sharing。 
+所以，初始化RingBuffer内所有对象时，从下标BUFFER_PAD开始，到BUFFER_PAD+bufferSize-1为止。取出某一sequence的对象，也是BUFFER_PAD开始算0,这里的：return (E) UNSAFE.getObject(entries, REF_ARRAY_BASE + ((sequence & indexMask) << REF_ELEMENT_SHIFT)); 
+代表取出entries对象，地址为REF_ARRAY_BASE + ((sequence & indexMask) << REF_ELEMENT_SHIFT)的对象。这里是个对象引用，地址是以REF_ARRAY_BASE 为基址（数组基址+数组头+引用偏移），每个引用占用2^REF_ELEMENT_SHIFT个字节，sequence 对bufferSize取模乘以2^REF_ELEMENT_SHIFT。 
+*/
 abstract class RingBufferFields<E> extends RingBufferPad
 {
-    private static final int BUFFER_PAD;
-    private static final long REF_ARRAY_BASE;
-    private static final int REF_ELEMENT_SHIFT;
+    private static final int BUFFER_PAD;//数组中一共需要填充的个数
+    private static final long REF_ARRAY_BASE;//数组的开始地址，这里其实是数组中真正有效数据的开始地址，是整个数组开始地址+BUFFER_PAD个引用的偏移量
+    private static final int REF_ELEMENT_SHIFT;//一个引用占用的字节数的幂次方.2^n=每个数组对象引用所占空间，这个n就是REF_ELEMENT_SHIFT.
     private static final Unsafe UNSAFE = Util.getUnsafe();
 
     static
     {
+        //获取数组中一个引用的字节数。Object数组引用长度，32位为4字节，64位为8字节
         final int scale = UNSAFE.arrayIndexScale(Object[].class);
         if (4 == scale)
         {
@@ -48,15 +54,19 @@ abstract class RingBufferFields<E> extends RingBufferPad
         {
             throw new IllegalStateException("Unknown pointer size");
         }
-        BUFFER_PAD = 128 / scale;
-        // Including the buffer pad in the array base offset
+        BUFFER_PAD = 128 / scale;//需要填充128字节，缓存行长度一般是128字节
+        //这里需要说明下，REF_ARRAY_BASE是整个数组的起始地址+用于缓存行填充的那些空位的偏移量
+        //BUFFER_PAD << REF_ELEMENT_SHIFT表示BUFFER_PAD个引用的占用字节数
+        //比如一个引用占用字节数是4，那么REF_ELEMENT_SHIFT是2
+        //BUFFER_PAD << REF_ELEMENT_SHIFT就相当于BUFFER_PAD * 4
+        //Including the buffer pad in the array base offset
         REF_ARRAY_BASE = UNSAFE.arrayBaseOffset(Object[].class) + (BUFFER_PAD << REF_ELEMENT_SHIFT);
     }
 
-    private final long indexMask;
-    private final Object[] entries;
-    protected final int bufferSize;
-    protected final Sequencer sequencer;
+    private final long indexMask;//数组的下表掩码
+    private final Object[] entries;//用来真正存放数据的数组
+    protected final int bufferSize;//数组的大小
+    protected final Sequencer sequencer;//生产者序列管理者
 
     RingBufferFields(
         EventFactory<E> eventFactory,
@@ -69,20 +79,37 @@ abstract class RingBufferFields<E> extends RingBufferPad
         {
             throw new IllegalArgumentException("bufferSize must not be less than 1");
         }
+        //判断bufferSize是否是2的整数次方
         if (Integer.bitCount(bufferSize) != 1)
         {
             throw new IllegalArgumentException("bufferSize must be a power of 2");
         }
 
         this.indexMask = bufferSize - 1;
+
+         /**
+         * 结构：缓存行填充，避免频繁访问的任一entry与另一被修改的无关变量写入同一缓存行
+         * -----------------------
+         * *   数组头   * BASE
+         * *   Padding  * 128字节
+         * * reference1 * SCALE
+         * * reference2 * SCALE
+         * * reference3 * SCALE
+         * ..........
+         * *   Padding  * 128字节
+         * -----------------------
+         */
+         //实际定义的数组是bufferSize + 2倍的BUFFER_PAD，所以实际数组大小会偏大
         this.entries = new Object[sequencer.getBufferSize() + 2 * BUFFER_PAD];
-        fill(eventFactory);
+        fill(eventFactory);//利用eventFactory初始化RingBuffer的每个槽
     }
 
     private void fill(EventFactory<E> eventFactory)
     {
         for (int i = 0; i < bufferSize; i++)
         {
+            //看到没有，是从数组的第BUFFER_PAD+1个元素开始为有效位置，最后一个有效位置为BUFFER_PAD+bufferSize
+            //在数组的前后都各有BUFFER_PAD个空位，是用来做缓存行填充用的
             entries[BUFFER_PAD + i] = eventFactory.newInstance();//队列内事件的预填充
         }
     }
@@ -90,6 +117,7 @@ abstract class RingBufferFields<E> extends RingBufferPad
     @SuppressWarnings("unchecked")
     protected final E elementAt(long sequence)
     {
+        //REF_ARRAY_BASE在初始化的时候，已经被初始化为数组中第BUFFER_PAD个元素的起始地址
         return (E) UNSAFE.getObject(entries, REF_ARRAY_BASE + ((sequence & indexMask) << REF_ELEMENT_SHIFT));
     }
 }
@@ -102,6 +130,8 @@ abstract class RingBufferFields<E> extends RingBufferPad
  *  1.整个RingBuffer内部做了大量的缓存行填充，前后各填充了56个字节，entries本身也根据引用大小进行了填充，假设引用大小为4字节，那么entries数组两侧就要个填充32个空数组位。也就是说，实际的数组长度比bufferSize要大。所以可以看到根据序列从entries中取元素的方法elementAt内部做了一些调整，不是单纯的取模。
  *  2.bufferSize必须是2的幂，indexMask就是bufferSize-1，这样取模更高效(sequence&indexMask)。
  *  3.初始化时需要传入一个EventFactory，用来做队列内事件的预填充。
+
+ 同时实现EventSequencer和EventSink代表RingBuffer是一个以Event槽为基础元素保存的数据结构
  *
  * @param <E> implementation storing the data for sharing during exchange or parallel coordination of an event.
  */
@@ -118,8 +148,8 @@ public final class RingBuffer<E> extends RingBufferFields<E> implements Cursored
      * @throws IllegalArgumentException if bufferSize is less than 1 or not a power of 2
      */
     RingBuffer(
-        EventFactory<E> eventFactory,
-        Sequencer sequencer)
+        EventFactory<E> eventFactory,//用来初始化数组中的数据
+        Sequencer sequencer)//管理生产者序列的管理者
     {
         super(eventFactory, sequencer);
     }

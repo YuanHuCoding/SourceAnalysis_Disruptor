@@ -53,6 +53,7 @@ class RhsPadding extends Value
  */
  /**
  * 主要用于记录/追踪生产者和消费者在RingBuffer上的位置.
+   一个Sequence用于跟踪标识某个特定的事件处理者(RingBuffer/Consumer)的处理进度
  */
 public class Sequence extends RhsPadding
 {
@@ -120,10 +121,11 @@ public class Sequence extends RhsPadding
      */
 	/**
      * 使用UnSafe在指定的内存位置设置value的值.
+      在当前写操作和任意之前的读操作之间加入Store/Store屏障       
      */
     public void set(final long value)
     {
-        UNSAFE.putOrderedLong(this, VALUE_OFFSET, value);
+        UNSAFE.putOrderedLong(this, VALUE_OFFSET, value);//ordered write 
     }
 
     /**
@@ -131,15 +133,15 @@ public class Sequence extends RhsPadding
      * a Store/Store barrier between this write and any previous
      * write and a Store/Load barrier between this write and any
      * subsequent volatile read.
+     * 使用UnSafe在指定的内存位置原子更新value的值.
+      在当前写操作和任意之前的读操作之间加入Store/Store屏障 
+      在当前写操作和任意之后的读操作之间加入Store/Load屏障 
      *
      * @param value The new value for the sequence.
      */
-	/**
-     * 使用UnSafe在指定的内存位置设置value的值.
-     */
     public void setVolatile(final long value)
     {
-        UNSAFE.putLongVolatile(this, VALUE_OFFSET, value);
+        UNSAFE.putLongVolatile(this, VALUE_OFFSET, value);//volatile write 
     }
 
     /**

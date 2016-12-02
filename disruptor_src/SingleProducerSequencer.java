@@ -60,7 +60,9 @@ abstract class SingleProducerSequencerFields extends SingleProducerSequencerPad
  * to {@link Sequencer#publish(long)} is made.
  */
 /**
- * 用于单生产者模式场景, 保存/追踪生产者和消费者的位置序号.
+ * 用于单生产者模式场景, 保存/追踪生产者和消费者的位置序号。
+   由于这个类并没有实现任何的Barrier，所以在Disruptor框架中，这个类并不是线程安全的。
+   不过由于从命名上看，就是单一生产者，所以在使用的时候也不会用多线程去调用里面的方法。 
  */
 public final class SingleProducerSequencer extends SingleProducerSequencerFields
 {
@@ -87,13 +89,15 @@ public final class SingleProducerSequencer extends SingleProducerSequencerFields
     /**
      * 判断RingBuffer是否还有可用的空间能够容纳requiredCapacity个Event.
       hasAvailableCapacity方法可以这样理解：
-              当前序列的nextValue + requiredCapacity是事件发布者要申请的序列值。
-              当前序列的cachedValue记录的是之前事件处理者申请的序列值。
-              想一下一个环形队列，事件发布者在什么情况下才能申请一个序列呢？
-              事件发布者当前的位置在事件处理者前面，并且不能从事件处理者后面追上事件处理者(因为是环形)，
-              即 事件发布者要申请的序列值大于事件处理者之前的序列值 且 事件发布者要申请的序列值减去环的长度要小于事件处理者的序列值 
-              如果满足这个条件，即使不知道当前事件处理者的序列值，也能确保事件发布者可以申请给定的序列。
-              如果不满足这个条件，就需要查看一下当前事件处理者的最小的序列值(因为可能有多个事件处理者)，如果当前要申请的序列值比当前事件处理者的最小序列值大了一圈(从后面追上了)，那就不能申请了(申请的话会覆盖没被消费的事件)，也就是说没有可用的空间(用来发布事件)了，也就是hasAvailableCapacity方法要表达的意思。
+      当前序列的nextValue + requiredCapacity是生产者要申请的序列值。
+      当前序列的cachedValue记录的是之前消费者申请的序列值。    
+      想一下一个环形队列，生产者在什么情况下才能申请一个序列呢？
+      生产者当前的位置在消费者前面，并且不能从消费者后面追上生产者(因为是环形)，
+      即 生产者要申请的序列值大于消费者之前的序列值 且 生产者要申请的序列值减去环的长度要小于消费者的序列值 
+      如果满足这个条件，即使不知道当前消费者的序列值，也能确保生产者可以申请给定的序列。
+      如果不满足这个条件，就需要查看一下当前消费者的最小的序列值(因为可能有多个消费者)，
+      如果当前要申请的序列值比当前消费者的最小序列值大了一圈(从后面追上了)，那就不能申请了(申请的话会覆盖没被消费的事件)，
+      也就是说没有可用的空间(用来发布事件)了，也就是hasAvailableCapacity方法要表达的意思。
       */
     @Override
     public boolean hasAvailableCapacity(final int requiredCapacity)
@@ -101,16 +105,24 @@ public final class SingleProducerSequencer extends SingleProducerSequencerFields
         // 生产者下一个可使用的位置序号
         long nextValue = this.nextValue;
 
-        // 从nextValue位置开始,如果再申请requiredCapacity个位置,将要达到的位置,因为是环形数组,所以减去bufferSize
+        // 从nextValue位置开始,如果再申请requiredCapacity个位置,将要达到的位置,因为是环形数组,所以减去bufferSize。
+        // 下一位置加上所需容量减去整个bufferSize，如果为正数，那证明至少转了一圈，则需要检查gatingSequences（由消费者更新里面的Sequence值）以保证不覆盖还未被消费的.
         // 下面会用该值和消费者的位置序号比较.
+        // 重叠点位置
         long wrapPoint = (nextValue + requiredCapacity) - bufferSize;
 
         // 消费者上一次消费的位置, 消费者每次消费之后会更新该值.
+        // Disruptor经常用缓存，这里缓存所有gatingSequences里最小的那个，这样不用每次都遍历一遍gatingSequences，影响效率.
         long cachedGatingSequence = this.cachedValue;
 
         // 先看看这个条件的对立条件: wrapPoint <= cachedGatingSequence && cachedGatingSequence <= nextValue
-        // 表示当前生产者走在消费者的前面, 并且就算再申请requiredCapacity个位置达到的位置也不会覆盖消费者上一次消费的位置(就更不用关心
-        // 当前消费者消费的位置了,因为消费者消费的位置是一直增大的),这种情况一定能够分配requiredCapacity个空间.
+        // 表示当前生产者走在消费者的前面, 并且就算再申请requiredCapacity个位置达到的位置也不会覆盖消费者上一次消费的位置.
+        // (就更不用关心当前消费者消费的位置了,因为消费者消费的位置是一直增大的),这种情况一定能够分配requiredCapacity个空间.
+
+        // wrapPoint > cachedGatingSequence
+        // 重叠位置大于缓存的消费者处理的序号，说明有消费者没有处理完成，不能够放置数据
+        // cachedGatingSequence > nextValue
+        // 只会在 https://github.com/LMAX-Exchange/disruptor/issues/76 情况下存在
         if (wrapPoint > cachedGatingSequence || cachedGatingSequence > nextValue)
         {
             // gatingSequences保存的是消费者的当前消费位置, 因为可能有多个消费者, 所以此处获取序号最小的位置.
@@ -155,28 +167,37 @@ public final class SingleProducerSequencer extends SingleProducerSequencerFields
             throw new IllegalArgumentException("n must be > 0");
         }
 
+        //复制上次成功申请的序列
         long nextValue = this.nextValue;
-
+        //加上n后，得到本次需要申请的序列
         long nextSequence = nextValue + n;
+        //本次申请的序列减去环形数组的长度，得到绕一圈后的序列
         long wrapPoint = nextSequence - bufferSize;
+        //复制消费者上次消费到的序列位置
         long cachedGatingSequence = this.cachedValue;
 
+        // 从逻辑来看，当生产者想申请某一个序列时，需要保证不会绕一圈之后，对消费者追尾；同时需要保证消费者上一次的消费最小序列没有对生产者追尾。
         // next方法是真正申请序列的方法，里面的逻辑和hasAvailableCapacity一样，只是在不能申请序列的时候会阻塞等待一下，然后重试。
-        // 这里的判断逻辑和上面的hasAvailableCapacity函数一致, 不多说了.
+        // wrapPoint > cachedGatingSequence,
+        // 重叠位置大于缓存的消费者处理的序号，说明有消费者没有处理完成，不能够放置数据
+        // cachedGatingSequence > nextValue
+        // 只会在 https://github.com/LMAX-Exchange/disruptor/issues/76 情况下存在
         if (wrapPoint > cachedGatingSequence || cachedGatingSequence > nextValue)
         {
             long minSequence;
-            // 如果一直没有可用空间, 当前线程挂起, 不断循环检测,直到有可用空间.
+            //如果一直没有可用空间, 当前线程挂起, 不断循环检测，直到有可用空间。
+            //循环判断生产者绕一圈之后，没有追上消费者的最小序列，如果还是追尾，则等待1纳秒，目前就是简单的等待，看注释是想在以后通过waitStrategy来等待
             while (wrapPoint > (minSequence = Util.getMinimumSequence(gatingSequences, nextValue)))
             {
                 waitStrategy.signalAllWhenBlocking();
-                LockSupport.parkNanos(1L); // TODO: Use waitStrategy to spin?
+                LockSupport.parkNanos(1L); // TODO: Use waitStrategy to spin?  //作者可能想以后通过waitStrategy来等待
             }
 
-            // 顺便更新一下消费者消费的位置序号.
+            //循环退出后，将获取的消费者最小序列，赋值给cachedValue
             this.cachedValue = minSequence;
         }
 
+        // 将成功申请到的nextSequence赋值给nextValue
         this.nextValue = nextSequence;
         // 返回最后一个可用位置的序号.
         return nextSequence;
@@ -224,7 +245,7 @@ public final class SingleProducerSequencer extends SingleProducerSequencerFields
      */
     /**
      * 返回当前RingBuffer的可用位置数目.
-       remainingCapacity方法就是环形队列的容量减去事件发布者与事件处理者的序列差。 
+       remainingCapacity方法就是环形队列的容量减去生产者与消费者的序列差。 
      */
     @Override
     public long remainingCapacity()
@@ -257,12 +278,13 @@ public final class SingleProducerSequencer extends SingleProducerSequencerFields
      */
     /**
      * 发布sequence位置的Event.
-     发布一个序列，会先设置内部游标值，然后唤醒等待的事件处理者。
+     发布一个序列，会先设置内部游标值，然后唤醒等待的消费者。
      */
     @Override
     public void publish(long sequence)
     {
         // 首先更新生产者游标
+        //cursor代表可以消费的sequence
         cursor.set(sequence);
         // 然后通知所有消费者, 数据可以被消费了.
         waitStrategy.signalAllWhenBlocking();

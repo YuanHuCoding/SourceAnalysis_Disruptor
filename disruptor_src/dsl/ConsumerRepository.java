@@ -32,6 +32,7 @@ class ConsumerRepository<T> implements Iterable<ConsumerInfo>
         new IdentityHashMap<Sequence, ConsumerInfo>();
     private final Collection<ConsumerInfo> consumerInfos = new ArrayList<ConsumerInfo>();
 
+    // 添加事件处理者(Event模式)、事件处理器和序列栅栏到仓库中。 
     public void add(
         final EventProcessor eventprocessor,
         final EventHandler<? super T> handler,
@@ -43,6 +44,7 @@ class ConsumerRepository<T> implements Iterable<ConsumerInfo>
         consumerInfos.add(consumerInfo);
     }
 
+    // 添加事件处理者(Event模式)到仓库中。 
     public void add(final EventProcessor processor)
     {
         final EventProcessorInfo<T> consumerInfo = new EventProcessorInfo<T>(processor, null, null);
@@ -50,6 +52,7 @@ class ConsumerRepository<T> implements Iterable<ConsumerInfo>
         consumerInfos.add(consumerInfo);
     }
 
+    // 添加事件处理者(Work模式)和序列栅栏到仓库中。
     public void add(final WorkerPool<T> workerPool, final SequenceBarrier sequenceBarrier)
     {
         final WorkerPoolInfo<T> workerPoolInfo = new WorkerPoolInfo<T>(workerPool, sequenceBarrier);
@@ -60,6 +63,7 @@ class ConsumerRepository<T> implements Iterable<ConsumerInfo>
         }
     }
 
+    //获取当前已经消费到RingBuffer上事件队列末尾的事件处理者的序列，可通过参数指定是否要包含已经停止的事件处理者。 
     public Sequence[] getLastSequenceInChain(boolean includeStopped)
     {
         List<Sequence> lastSequence = new ArrayList<Sequence>();
@@ -91,6 +95,7 @@ class ConsumerRepository<T> implements Iterable<ConsumerInfo>
         return getEventProcessorFor(handler).getSequence();
     }
 
+    // 重置已经处理到事件队列末尾的事件处理者的状态。
     public void unMarkEventProcessorsAsEndOfChain(final Sequence... barrierEventProcessors)
     {
         for (Sequence barrierEventProcessor : barrierEventProcessors)

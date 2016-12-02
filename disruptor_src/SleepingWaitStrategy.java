@@ -25,6 +25,8 @@ import java.util.concurrent.locks.LockSupport;
  * <p>
  * This strategy is a good compromise between performance and CPU resource.
  * Latency spikes can occur after quiet periods.
+ SleepingWaitStrategy的实现方法是先自旋，不行再临时让出调度(yield)，不行再短暂的阻塞等待。
+ 对于既想取得高性能，由不想太浪费CPU资源的场景，这个策略是一种比较好的折中方案。使用这个方案可能会出现延迟波动。
  */
 public final class SleepingWaitStrategy implements WaitStrategy
 {

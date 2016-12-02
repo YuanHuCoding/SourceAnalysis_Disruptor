@@ -25,6 +25,8 @@ import java.util.concurrent.locks.ReentrantLock;
  * the lock is uncontended.  Shows performance improvements on microbenchmarks.  However this
  * wait strategy should be considered experimental as I have not full proved the correctness of
  * the lock elision code.
+ 相比BlockingWaitStrategy，LiteBlockingWaitStrategy的实现方法也是阻塞等待，但它会减少一些不必要的唤醒。
+ 从源码的注释上看，这个策略在基准性能测试上是会表现出一些性能提升，但是作者还不能完全证明程序的正确性。
  */
 public final class LiteBlockingWaitStrategy implements WaitStrategy
 {
